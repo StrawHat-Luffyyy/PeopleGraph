@@ -1,5 +1,8 @@
 import { Hono } from 'hono';
+import { HttpError } from '../shared/errors.js';
 import type { Logger } from '../shared/logger.js';
+import { socialRoutes, type SocialStore } from './routes/social.js';
+import { userRoutes, type UserStore } from './routes/users.js';
 
 /** Resolves when the dependency is reachable, rejects otherwise. */
 export type HealthCheck = () => Promise<void>;
@@ -8,6 +11,9 @@ export interface AppDeps {
   checks: { neo4j: HealthCheck; redis: HealthCheck };
   readinessTimeoutMs: number;
   logger?: Logger;
+  /** Routes for each store are mounted only when it is provided. */
+  users?: UserStore;
+  social?: SocialStore;
 }
 
 type CheckState = 'up' | 'down';
@@ -54,9 +60,17 @@ export function createApp(deps: AppDeps): Hono {
     return c.json({ status: ready ? 'ready' : 'unavailable', checks }, ready ? 200 : 503);
   });
 
+  if (deps.users) app.route('/v1/users', userRoutes(deps.users));
+  if (deps.social) app.route('/v1', socialRoutes(deps.social));
+
   app.notFound((c) => c.json({ error: 'not_found' }, 404));
 
   app.onError((err, c) => {
+    // HttpError messages are written for clients and carry no PII; anything else is a
+    // bug or an infrastructure failure, so log it and return no details.
+    if (err instanceof HttpError) {
+      return c.json({ error: err.code, message: err.message }, err.status);
+    }
     deps.logger?.error({ err }, 'unhandled error');
     return c.json({ error: 'internal' }, 500);
   });

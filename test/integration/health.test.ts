@@ -1,31 +1,25 @@
-import { Neo4jContainer, type StartedNeo4jContainer } from '@testcontainers/neo4j';
 import { RedisContainer, type StartedRedisContainer } from '@testcontainers/redis';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createApp } from '../../src/api/app.js';
 import { createDriver, pingNeo4j, type Driver } from '../../src/graph/driver.js';
 import { createRedis, pingRedis, type Redis } from '../../src/shared/redis.js';
 
-// Same images as docker-compose.yml so tests and local dev run the same versions.
-const NEO4J_IMAGE = 'neo4j:5.26-community';
+// Same image as docker-compose.yml. Neo4j comes from the shared globalSetup container.
 const REDIS_IMAGE = 'redis:7-alpine';
-const PASSWORD = 'testcontainers-pw';
 
 describe('health check against real containers', () => {
-  let neo4jContainer: StartedNeo4jContainer;
   let redisContainer: StartedRedisContainer;
   let driver: Driver;
   let redis: Redis;
 
   beforeAll(async () => {
-    [neo4jContainer, redisContainer] = await Promise.all([
-      new Neo4jContainer(NEO4J_IMAGE).withPassword(PASSWORD).start(),
-      new RedisContainer(REDIS_IMAGE).start(),
-    ]);
+    redisContainer = await new RedisContainer(REDIS_IMAGE).start();
     driver = createDriver({
-      uri: neo4jContainer.getBoltUri(),
+      uri: inject('neo4jUri'),
       user: 'neo4j',
-      password: PASSWORD,
+      password: inject('neo4jPassword'),
       readTimeoutMs: 5000,
+      writeTimeoutMs: 10_000,
     });
     redis = createRedis({ url: redisContainer.getConnectionUrl() });
     await redis.connect();
@@ -33,7 +27,7 @@ describe('health check against real containers', () => {
 
   afterAll(async () => {
     await Promise.allSettled([driver.close(), redis.quit()]);
-    await Promise.allSettled([neo4jContainer.stop(), redisContainer.stop()]);
+    await redisContainer.stop();
   });
 
   it('pings Neo4j through a managed read transaction', async () => {

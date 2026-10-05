@@ -25,6 +25,7 @@ describe('loadConfig', () => {
         user: 'neo4j',
         password: 'secret',
         readTimeoutMs: 5000,
+        writeTimeoutMs: 10000,
       },
       redis: { url: 'redis://localhost:6379' },
       readinessTimeoutMs: 2000,
@@ -39,6 +40,7 @@ describe('loadConfig', () => {
       NEO4J_USER: 'reader',
       NEO4J_PASSWORD: 'pw',
       NEO4J_READ_TIMEOUT_MS: '1500',
+      NEO4J_WRITE_TIMEOUT_MS: '2500',
       REDIS_URL: 'rediss://cache:6380',
       READINESS_TIMEOUT_MS: '750',
     });
@@ -49,6 +51,7 @@ describe('loadConfig', () => {
       user: 'reader',
       password: 'pw',
       readTimeoutMs: 1500,
+      writeTimeoutMs: 2500,
     });
     expect(config.redis.url).toBe('rediss://cache:6380');
     expect(config.readinessTimeoutMs).toBe(750);
@@ -76,6 +79,7 @@ describe('loadConfig', () => {
   it('rejects non-positive timeouts', () => {
     expectConfigError({ ...minimal, NEO4J_READ_TIMEOUT_MS: '0' }, 'NEO4J_READ_TIMEOUT_MS');
     expectConfigError({ ...minimal, READINESS_TIMEOUT_MS: '-5' }, 'READINESS_TIMEOUT_MS');
+    expectConfigError({ ...minimal, NEO4J_WRITE_TIMEOUT_MS: '0' }, 'NEO4J_WRITE_TIMEOUT_MS');
   });
 
   it('reports every problem at once', () => {

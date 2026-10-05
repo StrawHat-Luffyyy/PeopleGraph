@@ -12,6 +12,8 @@ export interface Config {
     password: string;
     /** Transaction timeout applied to every read transaction. */
     readTimeoutMs: number;
+    /** Transaction timeout for writes, so lock-holding transactions cannot hang. */
+    writeTimeoutMs: number;
   };
   redis: { url: string };
   /** Upper bound for each dependency ping in /readyz. */
@@ -68,6 +70,7 @@ export function loadConfig(env: Env): Config {
   const neo4jUri = url('NEO4J_URI', 'bolt://localhost:7687', NEO4J_SCHEMES);
   const redisUrl = url('REDIS_URL', 'redis://localhost:6379', REDIS_SCHEMES);
   const readTimeoutMs = intInRange('NEO4J_READ_TIMEOUT_MS', 5000, 1, 600_000);
+  const writeTimeoutMs = intInRange('NEO4J_WRITE_TIMEOUT_MS', 10_000, 1, 600_000);
   const readinessTimeoutMs = intInRange('READINESS_TIMEOUT_MS', 2000, 1, 60_000);
 
   if (problems.length > 0) throw new ConfigError(problems);
@@ -80,6 +83,7 @@ export function loadConfig(env: Env): Config {
       user: env.NEO4J_USER ?? 'neo4j',
       password: password ?? '',
       readTimeoutMs,
+      writeTimeoutMs,
     },
     redis: { url: redisUrl },
     readinessTimeoutMs,

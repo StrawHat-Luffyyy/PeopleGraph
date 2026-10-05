@@ -13,4 +13,6 @@ export default tseslint.config(
       '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
     },
   },
+  // Plain JS build scripts are not in a TypeScript project, so type-aware rules cannot run.
+  { files: ['**/*.mjs'], extends: [tseslint.configs.disableTypeChecked] },
 );
