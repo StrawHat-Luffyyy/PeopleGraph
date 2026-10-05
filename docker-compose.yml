@@ -1,0 +1,47 @@
+services:
+  neo4j:
+    image: neo4j:5.26-community
+    ports:
+      - '7474:7474'
+      - '7687:7687'
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-peoplegraph-dev}
+    volumes:
+      - neo4j-data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:7474 >/dev/null || exit 1']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Benchmark baseline only (Phase 6). Start with: docker compose --profile bench up -d
+  postgres:
+    image: postgres:16
+    profiles: ['bench']
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: peoplegraph
+      POSTGRES_PASSWORD: peoplegraph-dev
+      POSTGRES_DB: peoplegraph
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U peoplegraph']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  neo4j-data:
+  pg-data:
