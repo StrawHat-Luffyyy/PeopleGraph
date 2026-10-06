@@ -18,6 +18,22 @@ export interface Config {
   redis: { url: string };
   /** Upper bound for each dependency ping in /readyz. */
   readinessTimeoutMs: number;
+  /** People-you-may-know weights and traversal bounds. See docs/adr/0002. */
+  pymk: PymkConfig;
+}
+
+export interface PymkConfig {
+  weights: { mutual: number; interest: number; followsYou: number };
+  /** Friends-of-friends expands only from this many of my most recent follows. */
+  maxFriends: number;
+  /** Friends-of-friends skips friends who follow more accounts than this. */
+  maxFanout: number;
+  /** Shared interests skips interests with more members than this. */
+  maxInterestFanout: number;
+  /** Follows-you runs only for users with at most this many followers. */
+  maxFollowersScan: number;
+  /** LIMIT on each candidate generator. */
+  candidatesPerSource: number;
 }
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -73,6 +89,29 @@ export function loadConfig(env: Env): Config {
   const writeTimeoutMs = intInRange('NEO4J_WRITE_TIMEOUT_MS', 10_000, 1, 600_000);
   const readinessTimeoutMs = intInRange('READINESS_TIMEOUT_MS', 2000, 1, 60_000);
 
+  const weight = (name: string, fallback: number): number => {
+    const raw = env[name];
+    if (raw === undefined) return fallback;
+    const n = /^\d+(\.\d+)?$/.test(raw.trim()) ? Number(raw) : NaN;
+    if (!Number.isFinite(n) || n > 1000) {
+      problems.push(`${name} must be a number between 0 and 1000`);
+      return fallback;
+    }
+    return n;
+  };
+  const pymk: PymkConfig = {
+    weights: {
+      mutual: weight('PYMK_W_MUTUAL', 3),
+      interest: weight('PYMK_W_INTEREST', 2),
+      followsYou: weight('PYMK_W_FOLLOWS_YOU', 5),
+    },
+    maxFriends: intInRange('PYMK_MAX_FRIENDS', 200, 1, 10_000),
+    maxFanout: intInRange('PYMK_MAX_FANOUT', 1000, 1, 1_000_000),
+    maxInterestFanout: intInRange('PYMK_MAX_INTEREST_FANOUT', 5000, 1, 1_000_000),
+    maxFollowersScan: intInRange('PYMK_MAX_FOLLOWERS_SCAN', 5000, 1, 1_000_000),
+    candidatesPerSource: intInRange('PYMK_CANDIDATES_PER_SOURCE', 100, 1, 1000),
+  };
+
   if (problems.length > 0) throw new ConfigError(problems);
 
   return {
@@ -87,5 +126,6 @@ export function loadConfig(env: Env): Config {
     },
     redis: { url: redisUrl },
     readinessTimeoutMs,
+    pymk,
   };
 }

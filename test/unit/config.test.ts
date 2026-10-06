@@ -29,7 +29,52 @@ describe('loadConfig', () => {
       },
       redis: { url: 'redis://localhost:6379' },
       readinessTimeoutMs: 2000,
+      pymk: {
+        weights: { mutual: 3, interest: 2, followsYou: 5 },
+        maxFriends: 200,
+        maxFanout: 1000,
+        maxInterestFanout: 5000,
+        maxFollowersScan: 5000,
+        candidatesPerSource: 100,
+      },
     });
+  });
+
+  it('reads PYMK weights and bounds from the environment', () => {
+    const { pymk } = loadConfig({
+      ...minimal,
+      PYMK_W_MUTUAL: '4',
+      PYMK_W_INTEREST: '0',
+      PYMK_W_FOLLOWS_YOU: '1.5',
+      PYMK_MAX_FRIENDS: '50',
+      PYMK_MAX_FANOUT: '300',
+      PYMK_MAX_INTEREST_FANOUT: '900',
+      PYMK_MAX_FOLLOWERS_SCAN: '10',
+      PYMK_CANDIDATES_PER_SOURCE: '40',
+    });
+    expect(pymk).toEqual({
+      weights: { mutual: 4, interest: 0, followsYou: 1.5 },
+      maxFriends: 50,
+      maxFanout: 300,
+      maxInterestFanout: 900,
+      maxFollowersScan: 10,
+      candidatesPerSource: 40,
+    });
+  });
+
+  it.each([
+    ['PYMK_W_MUTUAL', '-1'],
+    ['PYMK_W_INTEREST', 'abc'],
+    ['PYMK_W_FOLLOWS_YOU', ''],
+    ['PYMK_W_MUTUAL', '1001'],
+    ['PYMK_MAX_FRIENDS', '0'],
+    ['PYMK_MAX_FANOUT', '2.5'],
+    ['PYMK_MAX_INTEREST_FANOUT', '-3'],
+    ['PYMK_MAX_FOLLOWERS_SCAN', 'many'],
+    ['PYMK_CANDIDATES_PER_SOURCE', '0'],
+    ['PYMK_CANDIDATES_PER_SOURCE', '1001'],
+  ])('rejects %s=%j', (name, value) => {
+    expectConfigError({ ...minimal, [name]: value }, name);
   });
 
   it('reads every value from the environment', () => {

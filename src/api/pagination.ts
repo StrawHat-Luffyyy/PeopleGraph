@@ -14,11 +14,12 @@ export interface SinceCursor {
   id: string;
 }
 
-export function parseLimit(raw: string | undefined): number {
-  if (raw === undefined) return DEFAULT_PAGE_SIZE;
+/** Parses `?limit=`. Endpoints with a tighter cap than MAX_PAGE_SIZE pass their own `max`. */
+export function parseLimit(raw: string | undefined, max = MAX_PAGE_SIZE): number {
+  if (raw === undefined) return Math.min(DEFAULT_PAGE_SIZE, max);
   const n = /^\d+$/.test(raw) ? Number(raw) : NaN;
-  if (!Number.isInteger(n) || n < 1 || n > MAX_PAGE_SIZE) {
-    throw new ValidationError(`limit must be an integer between 1 and ${MAX_PAGE_SIZE}`);
+  if (!Number.isInteger(n) || n < 1 || n > max) {
+    throw new ValidationError(`limit must be an integer between 1 and ${max}`);
   }
   return n;
 }

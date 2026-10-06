@@ -71,4 +71,52 @@ describe('query plans', () => {
     expect(ops).toContain('Expand(Into)');
     expect(ops.filter((op) => op === 'Expand(All)')).toHaveLength(1);
   });
+
+  const n = (v: number) => neo4j.int(v);
+  const pymkQueries: [string, Record<string, unknown>][] = [
+    ['pymk-user', { userId: 'a' }],
+    ['pymk-fof', { userId: 'a', maxFriends: n(200), maxFanout: n(1000), limit: n(100) }],
+    ['pymk-interests', { userId: 'a', maxInterestFanout: n(5000), limit: n(100) }],
+    ['pymk-follows-you', { userId: 'a', limit: n(100) }],
+    ['pymk-filter', { userId: 'a', ids: ['b', 'c'] }],
+    ['pymk-hydrate', { ids: ['b', 'c'] }],
+  ];
+
+  it.each(pymkQueries)(
+    '%s seeks users by the unique id index and never scans',
+    async (name, params) => {
+      const { summary } = await g.driver.executeQuery(`EXPLAIN ${loadCypher(name)}`, params);
+      const ops = operators(summary.plan as Plan);
+      expect(ops.some((op) => op.startsWith('NodeUniqueIndexSeek'))).toBe(true);
+      expect(ops).not.toContain('NodeByLabelScan');
+      expect(ops).not.toContain('AllNodesScan');
+    },
+  );
+
+  it('pymk-fof caps the first hop with a LIMIT before expanding friends', async () => {
+    const { summary } = await g.driver.executeQuery(`EXPLAIN ${loadCypher('pymk-fof')}`, {
+      userId: 'a',
+      maxFriends: n(200),
+      maxFanout: n(1000),
+      limit: n(100),
+    });
+    // The first-hop cap must be a Top-N over my follows bounded by $maxFriends.
+    const details = (plan: Plan): string[] => [
+      `${plan.operatorType.replace(/@.*$/, '')} ${plan.arguments.Details ?? ''}`,
+      ...plan.children.flatMap(details),
+    ];
+    expect(details(summary.plan as Plan).some((d) => /^Top .*LIMIT \$maxFriends/.test(d))).toBe(
+      true,
+    );
+  });
+
+  it('pymk-filter checks follows and blocks with Expand(Into), not by fanning out', async () => {
+    const { summary } = await g.driver.executeQuery(`EXPLAIN ${loadCypher('pymk-filter')}`, {
+      userId: 'a',
+      ids: ['b'],
+    });
+    const ops = operators(summary.plan as Plan);
+    expect(ops).toContain('Expand(Into)');
+    expect(ops).not.toContain('Expand(All)');
+  });
 });

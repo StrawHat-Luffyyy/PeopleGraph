@@ -87,4 +87,4 @@ npm run bench:seed            # generate and load the power-law graph
 
 ## Current phase
 
-Phase 2: read paths (followers, following, mutuals, keyset pagination), done (pending CI on push). Next: Phase 3, PYMK v1. Update this line as phases complete.
+Phase 3: PYMK v1 (staged pipeline, bounded generators, explanations), done (pending CI on push). Next: Phase 4, scale and data generation (power-law graph, bulk load, celebrity fixes). Update this line as phases complete.

@@ -21,12 +21,22 @@ const cases: [string, Record<string, unknown>][] = [
   ['create-user', { id: B, handle: 'profile_b', name: 'Profile B' }],
   ['create-user', { id: C, handle: 'profile_c', name: 'Profile C' }],
   ['lock-users', { ids: [A, B] }],
-  ['replace-interests', { userId: A, interests: ['rust', 'chess'] }],
+  ['replace-interests', { userId: A, interests: ['profile-rust', 'profile-chess'] }],
   ['follow', { followerId: A, targetId: B }],
   ['follow', { followerId: C, targetId: B }],
   ['followers', { userId: B, ...firstPage }],
   ['following', { userId: A, ...firstPage }],
   ['mutuals', { aId: A, bId: C, cursorId: null, limit: neo4j.int(21) }],
+  ['follow', { followerId: B, targetId: A }],
+  ['pymk-user', { userId: C }],
+  [
+    'pymk-fof',
+    { userId: C, maxFriends: neo4j.int(200), maxFanout: neo4j.int(1000), limit: neo4j.int(100) },
+  ],
+  ['pymk-interests', { userId: A, maxInterestFanout: neo4j.int(5000), limit: neo4j.int(100) }],
+  ['pymk-follows-you', { userId: B, limit: neo4j.int(100) }],
+  ['pymk-filter', { userId: C, ids: [A, B] }],
+  ['pymk-hydrate', { ids: [A, B, C] }],
   ['unfollow', { followerId: A, targetId: B }],
   ['block', { blockerId: A, targetId: B }],
   ['counter-drift', { limit: neo4j.int(100) }],
@@ -54,6 +64,8 @@ try {
   await driver.executeQuery('MATCH (u:User) WHERE u.id IN $ids DETACH DELETE u', {
     ids: [A, B, C],
   });
+  // Interest names are prefixed so this only removes what the script created.
+  await driver.executeQuery("MATCH (i:Interest) WHERE i.name STARTS WITH 'profile-' DELETE i");
 } finally {
   await driver.close();
 }
