@@ -1,6 +1,7 @@
 import { serve } from '@hono/node-server';
 import { createApp } from './api/app.js';
 import { createDriver, pingNeo4j } from './graph/driver.js';
+import { ReadRepository } from './graph/readRepository.js';
 import { applySchema } from './graph/schema.js';
 import { SocialRepository } from './graph/socialRepository.js';
 import { UserRepository } from './graph/userRepository.js';
@@ -40,6 +41,7 @@ const app = createApp({
   logger,
   users: new UserRepository(driver, timeouts),
   social: new SocialRepository(driver, timeouts),
+  reads: new ReadRepository(driver, timeouts),
 });
 
 // Connect in the background; /readyz reports 503 until both dependencies answer.

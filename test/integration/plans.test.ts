@@ -1,4 +1,4 @@
-import type { Plan } from 'neo4j-driver';
+import neo4j, { type Plan } from 'neo4j-driver';
 import { describe, expect, it } from 'vitest';
 import { loadCypher } from '../../src/graph/cypher.js';
 import { useGraph } from './support/graph.js';
@@ -41,5 +41,34 @@ describe('query plans', () => {
     expect(ops.some((op) => op.startsWith('NodeUniqueIndexSeek'))).toBe(true);
     expect(ops).not.toContain('NodeByLabelScan');
     expect(ops).not.toContain('AllNodesScan');
+  });
+
+  const listQueries: [string, Record<string, unknown>][] = [
+    ['followers', { userId: 'a', cursorSince: null, cursorId: null, limit: neo4j.int(21) }],
+    ['following', { userId: 'a', cursorSince: null, cursorId: null, limit: neo4j.int(21) }],
+    ['mutuals', { aId: 'a', bId: 'b', cursorId: null, limit: neo4j.int(21) }],
+  ];
+
+  it.each(listQueries)(
+    '%s starts from a unique index seek and never scans',
+    async (name, params) => {
+      const { summary } = await g.driver.executeQuery(`EXPLAIN ${loadCypher(name)}`, params);
+      const ops = operators(summary.plan as Plan);
+      expect(ops.some((op) => op.startsWith('NodeUniqueIndexSeek'))).toBe(true);
+      expect(ops).not.toContain('NodeByLabelScan');
+      expect(ops).not.toContain('AllNodesScan');
+    },
+  );
+
+  it('mutuals checks the second user with Expand(Into), not a second fan-out', async () => {
+    const { summary } = await g.driver.executeQuery(`EXPLAIN ${loadCypher('mutuals')}`, {
+      aId: 'a',
+      bId: 'b',
+      cursorId: null,
+      limit: neo4j.int(21),
+    });
+    const ops = operators(summary.plan as Plan);
+    expect(ops).toContain('Expand(Into)');
+    expect(ops.filter((op) => op === 'Expand(All)')).toHaveLength(1);
   });
 });

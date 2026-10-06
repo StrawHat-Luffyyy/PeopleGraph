@@ -13,3 +13,12 @@ export function toNumber(value: unknown): number {
   }
   throw new TypeError(`expected an integer, got ${typeof value}`);
 }
+
+/**
+ * Converts a driver DateTime to its ISO-8601 string. Keeps full nanosecond precision
+ * (unlike a JS Date), which keyset cursors rely on to round-trip exactly.
+ */
+export function toIsoString(value: unknown): string {
+  if (neo4j.isDateTime(value)) return value.toString();
+  throw new TypeError('expected a datetime');
+}
