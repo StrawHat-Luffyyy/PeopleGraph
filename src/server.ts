@@ -1,6 +1,10 @@
 import { serve } from '@hono/node-server';
 import { createApp } from './api/app.js';
 import { createDriver, pingNeo4j } from './graph/driver.js';
+import { ReadRepository } from './graph/readRepository.js';
+import { applySchema } from './graph/schema.js';
+import { SocialRepository } from './graph/socialRepository.js';
+import { UserRepository } from './graph/userRepository.js';
 import { loadConfig } from './shared/config.js';
 import { createLogger } from './shared/logger.js';
 import { createRedis, pingRedis } from './shared/redis.js';
@@ -13,6 +17,21 @@ redis.on('error', (err: unknown) => {
   logger.warn({ err }, 'redis connection error');
 });
 
+// Constraints must exist before any write, or MERGE could create duplicates. Fail fast
+// (non-zero exit) if Neo4j is unreachable at startup; the supervisor restarts us.
+try {
+  await applySchema(driver);
+} catch (err) {
+  logger.fatal({ err }, 'failed to apply neo4j schema');
+  await driver.close();
+  process.exit(1);
+}
+
+const timeouts = {
+  readTimeoutMs: config.neo4j.readTimeoutMs,
+  writeTimeoutMs: config.neo4j.writeTimeoutMs,
+};
+
 const app = createApp({
   checks: {
     neo4j: () => pingNeo4j(driver, config.neo4j.readTimeoutMs),
@@ -20,6 +39,9 @@ const app = createApp({
   },
   readinessTimeoutMs: config.readinessTimeoutMs,
   logger,
+  users: new UserRepository(driver, timeouts),
+  social: new SocialRepository(driver, timeouts),
+  reads: new ReadRepository(driver, timeouts),
 });
 
 // Connect in the background; /readyz reports 503 until both dependencies answer.
