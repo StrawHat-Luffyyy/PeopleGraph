@@ -5,10 +5,11 @@ See [docs/PEOPLEGRAPH_PLAN.md](docs/PEOPLEGRAPH_PLAN.md) for the design and phas
 
 ## Status
 
-Phases 1 and 2 are complete.
+Phases 1 to 3 are complete.
 
 - **Write paths:** constraints, user creation, interests, follow, unfollow and block, safe under concurrent writes (see [ADR-0001](docs/adr/0001-write-path-node-locking.md)).
 - **Read paths:** followers, following and mutuals with keyset pagination.
+- **People you may know:** a staged pipeline (generate, score, filter, hydrate, explain) with bounded traversals (see [ADR-0002](docs/adr/0002-pymk-pipeline.md)). The weights are the design doc's starting values; they are not tuned yet, since that happens in Phase 7 against the offline eval.
 
 There are no benchmark results yet. Numbers will be added here only once they are measured. Query-level measurements so far are in [docs/profiles/](docs/profiles/).
 
@@ -55,6 +56,30 @@ All list endpoints need `X-User-Id`. They take `?limit=` (1-100, default 20) and
 - **Cursors are keyset-based,** never offsets. A page walk has no duplicates or gaps while new follows arrive. When an account already returned unfollows mid-walk, the remaining items don't shift into the gap the way they would with `SKIP`.
 - **Errors:** a limit outside 1-100 or a malformed cursor is `400`. An unknown user is `404`. Mutuals of a user with themselves is `400`.
 
+### Recommendations API
+
+`GET /v1/recommendations/people?limit=` (needs `X-User-Id`; `limit` 1-50, default 20) returns the caller's ranked "people you may know":
+
+```json
+{
+  "items": [
+    {
+      "id": "c1",
+      "handle": "kim",
+      "followerCount": 42,
+      "reasons": [{ "type": "mutuals", "count": 7, "sample": ["ana", "raj", "sam"] }],
+      "explanation": "followed by ana, raj and 5 others"
+    }
+  ]
+}
+```
+
+- **Signals:** friends of friends, shared interests, and people who follow you that you don't follow back.
+- **Never recommended:** yourself, accounts you already follow, and anyone on either side of a block.
+- **Tuning:** weights and traversal bounds are set with `PYMK_*` variables (see `.env.example`).
+- **No cursor:** the result is a ranked top-N, not a list to page through.
+- **Unknown caller:** `404`.
+
 Neo4j Browser is at http://localhost:7474 (user `neo4j`, password from `.env`).
 
 ## Checks
@@ -76,6 +101,7 @@ never point it at a shared database):
 ```bash
 npx tsx --env-file=.env scripts/profile-queries.ts
 npx tsx --env-file=.env scripts/measure-celebrity-reads.ts
+npx tsx --env-file=.env scripts/measure-pymk.ts
 ```
 
-The second script builds a 100,000-follower account, times the list queries against it, and deletes everything it created.
+The last two scripts each build their own test graph, time queries against it, and delete everything they created. One uses a 100,000-follower account; the other a user with 500 friends who each follow 300 accounts.

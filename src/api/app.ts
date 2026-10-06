@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { HttpError } from '../shared/errors.js';
 import type { Logger } from '../shared/logger.js';
 import { readRoutes, type ReadStore } from './routes/reads.js';
+import { recommendationRoutes, type RecommendationService } from './routes/recommendations.js';
 import { socialRoutes, type SocialStore } from './routes/social.js';
 import { userRoutes, type UserStore } from './routes/users.js';
 
@@ -16,6 +17,7 @@ export interface AppDeps {
   users?: UserStore;
   social?: SocialStore;
   reads?: ReadStore;
+  recommendations?: RecommendationService;
 }
 
 type CheckState = 'up' | 'down';
@@ -65,6 +67,9 @@ export function createApp(deps: AppDeps): Hono {
   if (deps.users) app.route('/v1/users', userRoutes(deps.users));
   if (deps.social) app.route('/v1', socialRoutes(deps.social));
   if (deps.reads) app.route('/v1/users', readRoutes(deps.reads));
+  if (deps.recommendations) {
+    app.route('/v1/recommendations', recommendationRoutes(deps.recommendations));
+  }
 
   app.notFound((c) => c.json({ error: 'not_found' }, 404));
 
